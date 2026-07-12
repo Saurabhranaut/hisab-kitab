@@ -163,6 +163,8 @@
 
 <div class="wrap">
   <div class="hero">
+    <div class="user_name">
+    </div>
     <div class="label">Aapka Overall Balance</div>
     <div class="amount mono" id="heroAmount">₹0</div>
     <div class="hint" id="heroHint">Loading...</div>
@@ -403,6 +405,9 @@ function renderAll(){
   renderHero(owes);
   renderPairs(owes);
   renderLedger();
+      
+  document.querySelector('.user_name').innerHTML = `<h3>Hello <span style="color: ${COLORS[currentId]}">${ROOMMATES[currentId]}</span>!</h3>`
+
 }
 
 async function loadExpenses(){
