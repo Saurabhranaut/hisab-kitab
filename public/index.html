@@ -356,12 +356,18 @@ function renderLedger(){
   [...expenses].reverse().forEach(exp => {
     const entry = document.createElement("div");
     entry.className = "entry";
+    const formattedDate = new Date(exp.date).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    });
     const share = Math.round(exp.amount / exp.splitAmong.length);
     entry.innerHTML = `
       <div class="stamp" style="border-color:${COLORS[exp.paidBy]}">${initials(ROOMMATES[exp.paidBy])}</div>
       <div class="entry-body">
         <div class="entry-desc">${escapeHtml(exp.desc)}</div>
         <div class="entry-meta">${ROOMMATES[exp.paidBy]} ne diya • ${exp.splitAmong.length} logon mein baata (₹${share}/person)</div>
+        <span class="entry-meta">${formattedDate}</span>
         <button class="entry-del" data-id="${exp._id}" data-user-id="${exp.user_id}">Delete</button>
       </div>
       <div class="entry-amt">₹${exp.amount}</div>
@@ -377,7 +383,7 @@ function renderLedger(){
       try{
         // user_id ko query param mein bhejna zaroori hai, warna backend
         // Number(undefined) = NaN compare karega aur hamesha 403 dega
-        const res = await fetch(`/api/expenses/${encodeURIComponent(id)}?user_id=${encodeURIComponent(user_id)}`, { method: "DELETE" });
+        const res = await fetch(`/api/expenses/${encodeURIComponent(id)}/${encodeURIComponent(currentId)}`, { method: "DELETE" });
         if(!res.ok){
           const err = await res.json().catch(() => ({}));
           throw new Error(err.error || "delete failed");
@@ -386,7 +392,7 @@ function renderLedger(){
         renderAll();
         showToast("Kharcha hataya gaya");
       }catch(e){
-        showToast("Delete nahi ho paya, dobara try karo");
+        showToast(e.message || "Delete nahi ho paya, dobara try karo");
       }
     });
   });

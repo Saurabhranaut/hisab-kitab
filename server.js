@@ -93,7 +93,7 @@ app.post("/api/expenses", async(req,res)=>{
 
 
 // DELETE expense
-app.delete("/api/expenses/:id", async(req,res)=>{
+app.delete("/api/expenses/:id/:user_id", async(req,res)=>{
 
     try{
 
@@ -107,7 +107,8 @@ app.delete("/api/expenses/:id", async(req,res)=>{
 
 
         // jis user ne create kiya wahi delete karega
-        if(expense.user_id !== Number(req.query.user_id)){
+        if(expense.user_id !== Number(req.params.user_id)){
+            // console.log("User ID mismatch:", expense.user_id, req.params.user_id);
             return res.status(403).json({
                 error:"Aap is expense ko delete nahi kar sakte"
             });
