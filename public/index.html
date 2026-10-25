@@ -151,13 +151,22 @@
     display:block; text-align:center; font-size:0.72rem; color:var(--muted);
     margin-top:10px; text-decoration:underline; cursor:pointer; background:none; border:none;
   }
+  .member-row{display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px dashed var(--paper-line); font-size:0.88rem; gap:10px;}
+  .member-row:last-child{border-bottom:none;}
+  .member-name{display:flex; align-items:center; gap:8px;}
+  .member-del{background:none; border:1px solid var(--stamp-red); color:var(--stamp-red); border-radius:999px; font-size:0.72rem; padding:3px 10px; cursor:pointer;}
+  .add-member-row{display:flex; gap:8px; margin-top:12px;}
+  .add-member-row input{flex:1;}
+  .add-member-row button{padding:10px 16px; background:var(--stamp-green); color:#fff; border:none; border-radius:8px; font-weight:600; cursor:pointer;}
+  .split-quick{display:flex; gap:8px; margin-top:4px;}
+  .split-quick button{background:none; border:1px solid var(--paper-line); border-radius:999px; padding:3px 12px; font-size:0.72rem; color:var(--muted); cursor:pointer;}
 </style>
 </head>
 <body>
 
 <div class="cover">
   <h1 class="slab">Hisab Kitaab</h1>
-  <p class="sub">Saurabh • Rakesh • Deepak • Sunil — saanjha kharcha, saaf hisab</p>
+  <p class="sub" id="coverSub">saanjha kharcha, saaf hisab</p>
   <div class="who-row" id="whoRow"></div>
 </div>
 
@@ -179,7 +188,9 @@
     <label>Kisne diya paisa?</label>
     <div class="split-grid" id="paidByGrid"></div>
     <label>Kis-kis mein baante?</label>
+    <div class="split-quick"><button type="button" id="splitAll">Sab</button><button type="button" id="splitNone">Koi nahi</button></div>
     <div class="split-grid" id="splitGrid"></div>
+    <div class="sub-note" id="splitPreview" style="margin:8px 0 0;"></div>
     <button class="primary" id="addBtn">Kharcha Jodo</button>
   </div>
 
@@ -191,6 +202,16 @@
   <div class="card">
     <h2><span class="num">3</span> Poora Khata</h2>
     <div id="ledgerList"></div>
+  </div>
+
+  <div class="card">
+    <h2><span class="num">4</span> Members</h2>
+    <p class="sub-note">Naya banda jodo ya kisi ko hatao. Purane kharche ledger mein safe rehte hain.</p>
+    <div id="memberList"></div>
+    <div class="add-member-row">
+      <input type="text" id="memberInput" placeholder="Naya naam" maxlength="30">
+      <button id="addMemberBtn">Jodo</button>
+    </div>
   </div>
 
   <button class="reset-link" id="resetBtn">Sab kharche reset karo</button>
@@ -207,18 +228,23 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const ROOMMATES = ["Saurabh", "Rakesh", "Deepak", "Sunil"];
-const COLORS = ["#A93226", "#1E6F46", "#B8892B", "#1B2A4A"];
+const COLORS = ["#A93226", "#1E6F46", "#B8892B", "#1B2A4A", "#6C3483", "#117A8B", "#BA4A00", "#566573"];
 
+let members = [];   // {id, name, active} -- server se aata hai
 let expenses = [];
 let currentId = null;
 
 function initials(name){ return name.slice(0,2).toUpperCase(); }
+function memberById(id){ return members.find(m => m.id === id); }
+function nameOf(id){ const m = memberById(id); return m ? m.name : "Unknown"; }
+function colorOf(id){ return COLORS[id % COLORS.length]; }
+function activeMembers(){ return members.filter(m => m.active); }
 
 function getIdFromUrl(){
   const params = new URLSearchParams(window.location.search);
   const n = parseInt(params.get("id"), 10);
-  return (!isNaN(n) && n >= 0 && n < ROOMMATES.length) ? n : null;
+  const m = memberById(n);
+  return (!isNaN(n) && m && m.active) ? n : null;
 }
 
 function setIdInUrl(id){
@@ -237,11 +263,11 @@ function showToast(msg){
 function renderWhoRow(){
   const row = document.getElementById("whoRow");
   row.innerHTML = "";
-  ROOMMATES.forEach((name, i) => {
+  activeMembers().forEach(m => {
     const chip = document.createElement("div");
-    chip.className = "who-chip" + (i === currentId ? " active" : "");
-    chip.innerHTML = `<span class="avatar" style="background:${COLORS[i]}">${initials(name)}</span>${name}`;
-    chip.onclick = () => { currentId = i; setIdInUrl(i); renderAll(); };
+    chip.className = "who-chip" + (m.id === currentId ? " active" : "");
+    chip.innerHTML = `<span class="avatar" style="background:${colorOf(m.id)}">${initials(m.name)}</span>${escapeHtml(m.name)}`;
+    chip.onclick = () => { currentId = m.id; setIdInUrl(m.id); renderAll(); };
     row.appendChild(chip);
   });
 }
@@ -252,7 +278,8 @@ function renderPickers(){
   paidByGrid.innerHTML = "";
   splitGrid.innerHTML = "";
 
-  ROOMMATES.forEach((name, i) => {
+  activeMembers().forEach(m => {
+    const i = m.id, name = escapeHtml(m.name);
     const pill = document.createElement("label");
     pill.className = "split-pill" + (i === currentId ? " checked" : "");
     pill.innerHTML = `<input type="radio" name="paidBy" value="${i}" ${i===currentId?"checked":""}> ${name}`;
@@ -263,15 +290,35 @@ function renderPickers(){
     paidByGrid.appendChild(pill);
   });
 
-  ROOMMATES.forEach((name, i) => {
+  activeMembers().forEach(m => {
+    const i = m.id, name = escapeHtml(m.name);
     const pill = document.createElement("label");
     pill.className = "split-pill checked";
     pill.innerHTML = `<input type="checkbox" value="${i}" checked> ${name}`;
     pill.querySelector("input").addEventListener("change", (e) => {
       pill.classList.toggle("checked", e.target.checked);
+      updateSplitPreview();
     });
     splitGrid.appendChild(pill);
   });
+  updateSplitPreview();
+}
+
+function updateSplitPreview(){
+  const el = document.getElementById("splitPreview");
+  const amt = parseFloat(document.getElementById("amtInput").value);
+  const n = document.querySelectorAll('#splitGrid input[type="checkbox"]:checked').length;
+  if (n === 0) el.textContent = "Kisi ko select nahi kiya";
+  else if (amt > 0) el.textContent = `${n} log mein baatega • ₹${Math.round(amt / n)} per person`;
+  else el.textContent = `${n} log select hain`;
+}
+
+function setAllSplit(checked){
+  document.querySelectorAll('#splitGrid .split-pill').forEach(p => {
+    p.querySelector("input").checked = checked;
+    p.classList.toggle("checked", checked);
+  });
+  updateSplitPreview();
 }
 
 // owes[i][j] = total amount person i owes person j, summed straight from
@@ -279,11 +326,13 @@ function renderPickers(){
 // owes[j][i] -- both directions can exist at once, exactly as they came
 // from real bills, so it stays easy to trace "kisko kyu dena hai".
 function computeOwesMatrix(){
-  const owes = ROOMMATES.map(() => ROOMMATES.map(() => 0));
+  // owes[idA][idB]; hataye gaye members bhi shamil hain taaki purana hisab na bigde
+  const owes = {};
+  members.forEach(a => { owes[a.id] = {}; members.forEach(b => { owes[a.id][b.id] = 0; }); });
   expenses.forEach(exp => {
     const share = exp.amount / exp.splitAmong.length;
     exp.splitAmong.forEach(idx => {
-      if (idx !== exp.paidBy) owes[idx][exp.paidBy] += share;
+      if (idx !== exp.paidBy && owes[idx] && owes[idx][exp.paidBy] !== undefined) owes[idx][exp.paidBy] += share;
     });
   });
   return owes;
@@ -291,7 +340,8 @@ function computeOwesMatrix(){
 
 function renderHero(owes){
   let iOwe = 0, owedToMe = 0;
-  ROOMMATES.forEach((_, j) => {
+  members.forEach(m => {
+    const j = m.id;
     if (j === currentId) return;
     iOwe += owes[currentId][j];
     owedToMe += owes[j][currentId];
@@ -318,8 +368,10 @@ function renderPairs(owes){
   list.innerHTML = "";
   let any = false;
 
-  ROOMMATES.forEach((name, j) => {
+  members.forEach(m => {
+    const j = m.id;
     if (j === currentId) return;
+    const name = escapeHtml(m.name) + (m.active ? "" : " (hata diya gaya)");
     const iOweThem = Math.round(owes[currentId][j]);
     const theyOweMe = Math.round(owes[j][currentId]);
 
@@ -363,10 +415,10 @@ function renderLedger(){
     });
     const share = Math.round(exp.amount / exp.splitAmong.length);
     entry.innerHTML = `
-      <div class="stamp" style="border-color:${COLORS[exp.paidBy]}">${initials(ROOMMATES[exp.paidBy])}</div>
+      <div class="stamp" style="border-color:${colorOf(exp.paidBy)}">${initials(nameOf(exp.paidBy))}</div>
       <div class="entry-body">
         <div class="entry-desc">${escapeHtml(exp.desc)}</div>
-        <div class="entry-meta">${ROOMMATES[exp.paidBy]} ne diya • ${exp.splitAmong.length} logon mein baata (₹${share}/person)</div>
+        <div class="entry-meta">${escapeHtml(nameOf(exp.paidBy))} ne diya • ${exp.splitAmong.map(id => escapeHtml(nameOf(id))).join(", ")} mein baata (₹${share}/person)</div>
         <span class="entry-meta">${formattedDate}</span>
         <button class="entry-del" data-id="${exp._id}" data-user-id="${exp.user_id}">Delete</button>
       </div>
@@ -406,14 +458,100 @@ function escapeHtml(str){
 
 function renderAll(){
   const owes = computeOwesMatrix();
+  document.getElementById("coverSub").textContent =
+    activeMembers().map(m => m.name).join(" • ") + " — saanjha kharcha, saaf hisab";
   renderWhoRow();
   renderPickers();
+  renderMembers();
   renderHero(owes);
   renderPairs(owes);
   renderLedger();
       
-  document.querySelector('.user_name').innerHTML = `<h3>Hello <span style="color: ${COLORS[currentId]}">${ROOMMATES[currentId]}</span>!</h3>`
+  document.querySelector('.user_name').innerHTML = `<h3>Hello <span style="color: ${colorOf(currentId)}">${escapeHtml(nameOf(currentId))}</span>!</h3>`
 
+}
+
+async function loadMembers(){
+  try{
+    const res = await fetch('/api/members');
+    if(!res.ok) throw new Error("load failed");
+    const data = await res.json();
+    members = data.members || [];
+  }catch(e){
+    members = [];
+    showToast("Members load nahi ho paye");
+  }
+}
+
+// is member ka overall net: + matlab milna hai, - matlab dena hai
+function netBalanceOf(id){
+  const owes = computeOwesMatrix();
+  let net = 0;
+  members.forEach(m => {
+    if (m.id === id) return;
+    net += owes[m.id][id] - owes[id][m.id];
+  });
+  return Math.round(net);
+}
+
+function renderMembers(){
+  const list = document.getElementById("memberList");
+  list.innerHTML = "";
+  activeMembers().forEach(m => {
+    const row = document.createElement("div");
+    row.className = "member-row";
+    row.innerHTML = `<span class="member-name"><span class="avatar" style="background:${colorOf(m.id)}">${initials(m.name)}</span>${escapeHtml(m.name)}${m.id === currentId ? " (aap)" : ""}</span>`;
+    if (m.id !== currentId){
+      const btn = document.createElement("button");
+      btn.className = "member-del";
+      btn.textContent = "Hatao";
+      btn.onclick = () => removeMember(m);
+      row.appendChild(btn);
+    }
+    list.appendChild(row);
+  });
+}
+
+async function addMember(){
+  const input = document.getElementById("memberInput");
+  const name = input.value.trim();
+  if(!name){ showToast("Naam likho"); return; }
+  try{
+    const res = await fetch('/api/members', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(data.error || "add failed");
+    input.value = "";
+    await loadMembers();
+    renderAll();
+    showToast(name + " jud gaya!");
+  }catch(e){
+    showToast(e.message || "Member add nahi ho paya");
+  }
+}
+
+async function removeMember(m){
+  if (activeMembers().length <= 2){ showToast("Kam se kam 2 members rehne chahiye"); return; }
+  const net = netBalanceOf(m.id);
+  let msg = `${m.name} ko hatana hai?`;
+  if (net !== 0){
+    msg += `\n\nDhyan do: ${m.name} ka abhi ₹${Math.abs(net)} ${net > 0 ? "milna" : "dena"} baaki hai.`;
+  }
+  msg += `\nPurane kharche ledger mein rahenge.`;
+  if(!confirm(msg)) return;
+  try{
+    const res = await fetch(`/api/members/${encodeURIComponent(m.id)}`, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok) throw new Error(data.error || "remove failed");
+    await loadMembers();
+    renderAll();
+    showToast(m.name + " hata diya gaya");
+  }catch(e){
+    showToast(e.message || "Remove nahi ho paya");
+  }
 }
 
 async function loadExpenses(){
@@ -476,13 +614,13 @@ function showOnboarding(){
   const overlay = document.getElementById("onboardOverlay");
   const btns = document.getElementById("onboardBtns");
   btns.innerHTML = "";
-  ROOMMATES.forEach((name, i) => {
+  activeMembers().forEach(m => {
     const b = document.createElement("button");
     b.className = "id-btn";
-    b.textContent = name;
+    b.textContent = m.name;
     b.onclick = () => {
-      currentId = i;
-      setIdInUrl(i);
+      currentId = m.id;
+      setIdInUrl(m.id);
       overlay.style.display = "none";
       renderAll();
     };
@@ -492,21 +630,27 @@ function showOnboarding(){
 }
 
 async function init(){
+  await loadMembers();
   await loadExpenses();
   const urlId = getIdFromUrl();
   if (urlId === null){
     showOnboarding();
-    currentId = 0;
+    currentId = (activeMembers()[0] || { id: 0 }).id;
   } else {
     currentId = urlId;
   }
   renderAll();
 
   document.getElementById("addBtn").addEventListener("click", addExpense);
+  document.getElementById("amtInput").addEventListener("input", updateSplitPreview);
+  document.getElementById("splitAll").addEventListener("click", () => setAllSplit(true));
+  document.getElementById("splitNone").addEventListener("click", () => setAllSplit(false));
+  document.getElementById("addMemberBtn").addEventListener("click", addMember);
+  document.getElementById("memberInput").addEventListener("keydown", e => { if (e.key === "Enter") addMember(); });
   document.getElementById("resetBtn").addEventListener("click", async () => {
     if(confirm("Sach mein sab kharche delete karne hain? Yeh sabke liye delete ho jayega.")){
       for (const exp of [...expenses]){
-        await fetch(`/api/expenses/${encodeURIComponent(exp._id)}?user_id=${exp.user_id}`, { method: "DELETE" });
+        await fetch(`/api/expenses/${encodeURIComponent(exp._id)}/${exp.user_id}`, { method: "DELETE" });
       }
       await loadExpenses();
       renderAll();
